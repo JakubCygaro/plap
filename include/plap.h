@@ -135,7 +135,6 @@ Args plap_parse_args(ArgsDef def, int argc, char** args)
     };
 
     char* next = NULL;
-    size_t positional = 0;
     while ((next = plap_args_wrap_next(&awrap))) {
         if (next[0] == '-') {
             plap_parse_option(next + 1, &awrap, def.opt_defs, def.opt_count, &a.optional_args[a.optional_count++]);
@@ -144,6 +143,11 @@ Args plap_parse_args(ArgsDef def, int argc, char** args)
             PositionalArg* parg = &a.positional_args[a.positional_count++];
             plap_parse_positional(next, parg, pdef);
         }
+    }
+    if(a.positional_count != def.pos_count){
+        fprintf(stderr, "Not enough positional arguments were supplied\n");
+        plap_print_usage(&def, prog_name);
+        exit(-1);
     }
     plap_free_args_def(def);
     return a;
