@@ -135,6 +135,7 @@ Args plap_parse_args(ArgsDef def, int argc, char** args)
     };
 
     char* next = NULL;
+    int positional = 0;
     while ((next = plap_args_wrap_next(&awrap))) {
         if (next[0] == '-') {
             plap_parse_option(next + 1, &awrap, def.opt_defs, def.opt_count, &a.optional_args[a.optional_count++]);
