@@ -96,12 +96,11 @@ ArgsWrap plap_args_wrap_wrap(int argc, char** args);
 char* plap_args_wrap_next(ArgsWrap* aw);
 
 #endif
-// #define PLAP_IMPLEMENTATION
 #ifdef PLAP_IMPLEMENTATION
 
 void plap_print_usage(ArgsDef* def, const char* prog_name)
 {
-    printf("%s USAGE ", prog_name);
+    printf("USAGE \n\t%s ", prog_name);
     for (size_t i = 0; i < def->pos_count; i++) {
         printf("%s ", def->pos_defs[i].name);
     }
