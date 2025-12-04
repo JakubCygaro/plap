@@ -42,6 +42,7 @@ typedef struct args_t {
 
 typedef struct positional_def {
     int parse_as;
+    int required;
     char* name;
 } PositionalDef;
 
@@ -58,6 +59,7 @@ typedef struct args_def_t {
     size_t pos_count;
     size_t pos_sz;
     PositionalDef* pos_defs;
+    size_t pos_req;
 
     // options
     size_t opt_count;
@@ -78,10 +80,10 @@ ArgsDef plap_args_def();
 Args plap_parse_args(ArgsDef def, int argc, char** args);
 void plap_print_usage(ArgsDef* def, const char* prog_name);
 
-void plap_positional(ArgsDef* def, const char* name, int parse_as);
-void plap_positional_string(ArgsDef* def, const char* name);
-void plap_positional_int(ArgsDef* def, const char* name);
-void plap_positional_double(ArgsDef* def, const char* name);
+void plap_positional(ArgsDef* def, const char* name, int parse_as, int required);
+void plap_positional_string(ArgsDef* def, const char* name, int required);
+void plap_positional_int(ArgsDef* def, const char* name, int required);
+void plap_positional_double(ArgsDef* def, const char* name, int required);
 
 void plap_option(ArgsDef* def, const char* sh, const char* l, int parse_as, int needs_value);
 void plap_option_string(ArgsDef* def, const char* sh, const char* l, int needs_value);
@@ -124,7 +126,7 @@ Args plap_parse_args(ArgsDef def, int argc, char** args)
 {
     ArgsWrap awrap = plap_args_wrap_wrap(argc, args);
     char* prog_name = plap_args_wrap_next(&awrap);
-    if ((argc - 1) < def.pos_count || argc == 0) {
+    if ((argc - 1) < def.pos_req || argc == 0) {
         fprintf(stderr, "Not enough arguments were supplied\n");
         plap_print_usage(&def, prog_name);
         exit(-1);
@@ -283,26 +285,28 @@ void plap_parse_option(const char* value, ArgsWrap* awrap, OptionDef* optdefs, s
     }
 }
 
-void plap_positional_int(ArgsDef* def, const char* name)
+void plap_positional_int(ArgsDef* def, const char* name, int required)
 {
-    plap_positional(def, name, PLAP_INT);
+    plap_positional(def, name, PLAP_INT, required);
 }
 
-void plap_positional_double(ArgsDef* def, const char* name)
+void plap_positional_double(ArgsDef* def, const char* name, int required)
 {
-    plap_positional(def, name, PLAP_DOUBLE);
+    plap_positional(def, name, PLAP_DOUBLE, required);
 }
-void plap_positional_string(ArgsDef* def, const char* name)
+void plap_positional_string(ArgsDef* def, const char* name, int required)
 {
-    plap_positional(def, name, PLAP_STRING);
+    plap_positional(def, name, PLAP_STRING, required);
 }
 
-void plap_positional(ArgsDef* def, const char* name, int parse_as)
+void plap_positional(ArgsDef* def, const char* name, int parse_as, int required)
 {
     PositionalDef pdef = { 0 };
     pdef.name = calloc(strlen(name) + 1, sizeof(char));
     strcpy(pdef.name, name);
     pdef.parse_as = parse_as;
+    pdef.required = required;
+    def->pos_req += (required ? 1 : 0);
     if (++def->pos_count >= def->pos_sz) {
         def->pos_sz *= 2;
         def->pos_defs = realloc(def->pos_defs, sizeof(PositionalDef) * def->pos_sz);
