@@ -368,7 +368,7 @@ char* plap_args_wrap_next(ArgsWrap* aw)
 void plap_free_args(Args a)
 {
     for (size_t i = 0; i < a.positional_count; i++) {
-        if (a.positional_args[i].str) {
+        if (a.positional_args[i].t == PLAP_STRING && a.positional_args[i].str) {
             free(a.positional_args[i].str);
             a.positional_args[i].str = NULL;
         }
@@ -386,7 +386,7 @@ void plap_free_option(Option opt)
     if (opt.short_name) {
         free(opt.short_name);
     }
-    if (opt.str) {
+    if (opt.t == PLAP_STRING && opt.str) {
         free(opt.str);
     }
 }
