@@ -150,7 +150,7 @@ Args plap_parse_args(ArgsDef def, int argc, char** args)
             plap_parse_positional(next, parg, pdef);
         }
     }
-    if (a.positional_count != def.pos_count) {
+    if (a.positional_count < def.pos_req) {
         fprintf(stderr, "Not enough positional arguments were supplied\n");
         plap_print_usage(&def, prog_name);
         exit(-1);
@@ -190,8 +190,8 @@ void plap_parse_positional(char* value, PositionalArg* parg, PositionalDef* pdef
             break;
         }
         if (pdef->name) {
-            parg->name = pdef->name;
-            pdef->name = NULL;
+            parg->name = (char*)calloc(strlen(pdef->name) + 1, sizeof(char));
+            strcpy(parg->name, pdef->name);
         }
     } else {
         parg->t = PLAP_STRING;
@@ -259,7 +259,7 @@ void plap_parse_option(const char* value, ArgsWrap* awrap, OptionDef* optdefs, s
     res->short_name = (char*)calloc(strlen(s) + 1, sizeof(char));
     strcpy(res->short_name, s);
 
-    if(!optdf->needs_value){
+    if (!optdf->needs_value) {
         return;
     }
     char* next = plap_args_wrap_next(awrap);
