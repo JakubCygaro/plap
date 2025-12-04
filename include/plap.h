@@ -48,6 +48,7 @@ typedef struct positional_def {
 typedef struct option_def {
     int matched;
     int parse_as;
+    int needs_value;
     char* short_name;
     char* long_name;
 } OptionDef;
@@ -82,10 +83,10 @@ void plap_positional_string(ArgsDef* def, const char* name);
 void plap_positional_int(ArgsDef* def, const char* name);
 void plap_positional_double(ArgsDef* def, const char* name);
 
-void plap_option(ArgsDef* def, const char* sh, const char* l, int parse_as);
-void plap_option_string(ArgsDef* def, const char* sh, const char* l);
-void plap_option_int(ArgsDef* def, const char* sh, const char* l);
-void plap_option_double(ArgsDef* def, const char* sh, const char* l);
+void plap_option(ArgsDef* def, const char* sh, const char* l, int parse_as, int needs_value);
+void plap_option_string(ArgsDef* def, const char* sh, const char* l, int needs_value);
+void plap_option_int(ArgsDef* def, const char* sh, const char* l, int needs_value);
+void plap_option_double(ArgsDef* def, const char* sh, const char* l, int needs_value);
 
 void plap_free_option(Option opt);
 void plap_free_args_def(ArgsDef def);
@@ -256,6 +257,9 @@ void plap_parse_option(const char* value, ArgsWrap* awrap, OptionDef* optdefs, s
     res->short_name = (char*)calloc(strlen(s) + 1, sizeof(char));
     strcpy(res->short_name, s);
 
+    if(!optdf->needs_value){
+        return;
+    }
     char* next = plap_args_wrap_next(awrap);
     if (!next) {
         fprintf(stderr, "Option `%s` without value\n", value - 1);
@@ -305,19 +309,19 @@ void plap_positional(ArgsDef* def, const char* name, int parse_as)
     }
     def->pos_defs[def->pos_count - 1] = pdef;
 }
-void plap_option_string(ArgsDef* def, const char* sh, const char* l)
+void plap_option_string(ArgsDef* def, const char* sh, const char* l, int needs_value)
 {
-    plap_option(def, sh, l, PLAP_STRING);
+    plap_option(def, sh, l, PLAP_STRING, needs_value);
 }
-void plap_option_int(ArgsDef* def, const char* sh, const char* l)
+void plap_option_int(ArgsDef* def, const char* sh, const char* l, int needs_value)
 {
-    plap_option(def, sh, l, PLAP_INT);
+    plap_option(def, sh, l, PLAP_INT, needs_value);
 }
-void plap_option_double(ArgsDef* def, const char* sh, const char* l)
+void plap_option_double(ArgsDef* def, const char* sh, const char* l, int needs_value)
 {
-    plap_option(def, sh, l, PLAP_DOUBLE);
+    plap_option(def, sh, l, PLAP_DOUBLE, needs_value);
 }
-void plap_option(ArgsDef* def, const char* sh, const char* l, int parse_as)
+void plap_option(ArgsDef* def, const char* sh, const char* l, int parse_as, int needs_value)
 {
     OptionDef odef = { 0 };
     odef.long_name = calloc(strlen(l) + 1, sizeof(char));
@@ -327,6 +331,7 @@ void plap_option(ArgsDef* def, const char* sh, const char* l, int parse_as)
         strcpy(odef.short_name, sh);
     }
     odef.parse_as = parse_as;
+    odef.needs_value = needs_value;
     if (++def->opt_count >= def->opt_sz) {
         def->opt_sz *= 2;
         def->opt_defs = realloc(def->opt_defs, sizeof(OptionDef) * def->opt_sz);
