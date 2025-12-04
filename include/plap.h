@@ -11,6 +11,7 @@
 
 typedef struct positional_arg {
     char* name;
+    int t;
     union {
         char* str;
         int i;
@@ -21,6 +22,7 @@ typedef struct positional_arg {
 typedef struct option {
     char* short_name;
     char* long_name;
+    int t;
     union {
         char* str;
         int i;
@@ -170,13 +172,16 @@ void plap_parse_positional(char* value, PositionalArg* parg, PositionalDef* pdef
     if (pdef) {
         switch (pdef->parse_as) {
         case PLAP_INT:
+            parg->t = PLAP_INT;
             parg->i = atoi(value);
             break;
         case PLAP_DOUBLE:
+            parg->t = PLAP_DOUBLE;
             parg->lf = atof(value);
             break;
         case PLAP_STRING:
         default:
+            parg->t = PLAP_STRING;
             parg->str = (char*)calloc(strlen(value) + 1, sizeof(char));
             strcpy(parg->str, value);
             break;
@@ -186,6 +191,7 @@ void plap_parse_positional(char* value, PositionalArg* parg, PositionalDef* pdef
             pdef->name = NULL;
         }
     } else {
+        parg->t = PLAP_STRING;
         parg->str = (char*)calloc(strlen(value) + 1, sizeof(char));
         strcpy(parg->str, value);
     }
@@ -246,9 +252,9 @@ void plap_parse_option(const char* value, ArgsWrap* awrap, OptionDef* optdefs, s
     }
     optdf->matched = 1;
     res->long_name = (char*)calloc(strlen(ln) + 1, sizeof(char));
+    strcpy(res->long_name, ln);
     res->short_name = (char*)calloc(strlen(s) + 1, sizeof(char));
-    strcpy(res->long_name, (char*)ln);
-    strcpy(res->short_name, (char*)s);
+    strcpy(res->short_name, s);
 
     char* next = plap_args_wrap_next(awrap);
     if (!next) {
@@ -257,13 +263,16 @@ void plap_parse_option(const char* value, ArgsWrap* awrap, OptionDef* optdefs, s
     }
     switch (optdf->parse_as) {
     case PLAP_INT:
-        res->i = atoi(value);
+        res->t = PLAP_INT;
+        res->i = atoi(next);
         break;
     case PLAP_DOUBLE:
-        res->lf = atof(value);
+        res->t = PLAP_DOUBLE;
+        res->lf = atof(next);
         break;
     case PLAP_STRING:
     default:
+        res->t = PLAP_STRING;
         res->str = (char*)calloc(strlen(next) + 1, sizeof(char));
         strcpy(res->str, next);
         break;
