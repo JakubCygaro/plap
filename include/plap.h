@@ -254,10 +254,14 @@ void plap_parse_option(const char* value, ArgsWrap* awrap, OptionDef* optdefs, s
         exit(-1);
     }
     optdf->matched = 1;
-    res->long_name = (char*)calloc(strlen(ln) + 1, sizeof(char));
-    strcpy(res->long_name, ln);
-    res->short_name = (char*)calloc(strlen(s) + 1, sizeof(char));
-    strcpy(res->short_name, s);
+    if(ln){
+        res->long_name = (char*)calloc(strlen(ln) + 1, sizeof(char));
+        strcpy(res->long_name, ln);
+    }
+    if(s){
+        res->short_name = (char*)calloc(strlen(s) + 1, sizeof(char));
+        strcpy(res->short_name, s);
+    }
 
     if (!optdf->needs_value) {
         return;
