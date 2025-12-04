@@ -221,7 +221,7 @@ Option* find_option(Option* opts, size_t ocount, const char* sh, const char* l)
 {
     for (size_t i = 0; i < ocount; i++) {
         Option* od = &opts[i];
-        if (od->long_name == l || od->short_name == sh) {
+        if (streq(od->long_name, l) || streq(od->short_name, sh)) {
             return od;
         }
     }
