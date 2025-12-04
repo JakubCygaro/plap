@@ -145,7 +145,7 @@ Args plap_parse_args(ArgsDef def, int argc, char** args)
             plap_parse_positional(next, parg, pdef);
         }
     }
-    if(a.positional_count != def.pos_count){
+    if (a.positional_count != def.pos_count) {
         fprintf(stderr, "Not enough positional arguments were supplied\n");
         plap_print_usage(&def, prog_name);
         exit(-1);
@@ -178,6 +178,7 @@ void plap_parse_positional(char* value, PositionalArg* parg, PositionalDef* pdef
         case PLAP_STRING:
         default:
             parg->str = value;
+            strcpy(parg->str, value);
             break;
         }
         if (pdef->name) {
@@ -185,13 +186,14 @@ void plap_parse_positional(char* value, PositionalArg* parg, PositionalDef* pdef
             pdef->name = NULL;
         }
     } else {
-        parg->str = value;
+        strcpy(parg->str, value);
     }
 }
 
 int streq(const char* a, const char* b)
 {
-    if(!a || !b) return 0;
+    if (!a || !b)
+        return 0;
     return strcmp(a, b) == 0;
 }
 
@@ -259,7 +261,7 @@ void plap_parse_option(const char* value, ArgsWrap* awrap, OptionDef* optdefs, s
         break;
     case PLAP_STRING:
     default:
-        res->str = next;
+        strcpy(res->str, next);
         break;
     }
 }
@@ -379,8 +381,9 @@ Option* plap_get_option(Args* args, const char* sh, const char* l)
 {
     return find_option(args->optional_args, args->optional_count, sh, l);
 }
-PositionalArg* plap_get_positional(Args* args, size_t pos){
-    if(pos < args->positional_count){
+PositionalArg* plap_get_positional(Args* args, size_t pos)
+{
+    if (pos < args->positional_count) {
         return &args->positional_args[pos];
     }
     return NULL;
