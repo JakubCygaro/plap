@@ -177,7 +177,7 @@ void plap_parse_positional(char* value, PositionalArg* parg, PositionalDef* pdef
             break;
         case PLAP_STRING:
         default:
-            parg->str = value;
+            parg->str = (char*)calloc(strlen(value) + 1, sizeof(char));
             strcpy(parg->str, value);
             break;
         }
@@ -186,6 +186,7 @@ void plap_parse_positional(char* value, PositionalArg* parg, PositionalDef* pdef
             pdef->name = NULL;
         }
     } else {
+        parg->str = (char*)calloc(strlen(value) + 1, sizeof(char));
         strcpy(parg->str, value);
     }
 }
@@ -244,8 +245,10 @@ void plap_parse_option(const char* value, ArgsWrap* awrap, OptionDef* optdefs, s
         exit(-1);
     }
     optdf->matched = 1;
-    res->long_name = (char*)ln;
-    res->short_name = (char*)s;
+    res->long_name = (char*)calloc(strlen(ln) + 1, sizeof(char));
+    res->short_name = (char*)calloc(strlen(s) + 1, sizeof(char));
+    strcpy(res->long_name, (char*)ln);
+    strcpy(res->short_name, (char*)s);
 
     char* next = plap_args_wrap_next(awrap);
     if (!next) {
@@ -261,6 +264,7 @@ void plap_parse_option(const char* value, ArgsWrap* awrap, OptionDef* optdefs, s
         break;
     case PLAP_STRING:
     default:
+        res->str = (char*)calloc(strlen(next) + 1, sizeof(char));
         strcpy(res->str, next);
         break;
     }
