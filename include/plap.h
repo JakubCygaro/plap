@@ -62,11 +62,18 @@ typedef struct args_def_t {
     size_t pos_sz;
     PositionalDef* pos_defs;
     size_t pos_req;
+    size_t pos_longest_n;
 
     // options
     size_t opt_count;
     size_t opt_sz;
     OptionDef* opt_defs;
+    size_t opt_longest_sh_n;
+    size_t opt_longest_ln_n;
+
+    // general
+    char* prog_name;
+    char* prog_desc;
 } ArgsDef;
 
 typedef struct args_wrap {
@@ -81,6 +88,9 @@ void plap_parse_option(const char* value, ArgsWrap* awrap, OptionDef* optdefs, s
 ArgsDef plap_args_def();
 Args plap_parse_args(ArgsDef def, int argc, char** args);
 void plap_print_usage(ArgsDef* def, const char* prog_name);
+
+/// Leave `name` as NULL if you don't want the default program name to be overriden
+void plap_program_desc(ArgsDef* def, const char* name, const char* desc);
 
 void plap_positional(ArgsDef* def, const char* name, const char* desc, int parse_as, int required);
 
@@ -115,31 +125,58 @@ PositionalArg* plap_get_positional(Args* args, size_t pos);
 ArgsWrap plap_args_wrap_wrap(int argc, char** args);
 char* plap_args_wrap_next(ArgsWrap* aw);
 
-
 #endif
 #ifdef PLAP_IMPLEMENTATION
 
-#define PLAP_DEFINITION_ERROR(MSG, ...)\
-    fprintf(stderr, "PLAP DEFINITION ERROR: " MSG, ## __VA_ARGS__);\
+#define PLAP_DEFINITION_ERROR(MSG, ...)                            \
+    fprintf(stderr, "PLAP DEFINITION ERROR: " MSG, ##__VA_ARGS__); \
     exit(-1)
+
+#define plap_max(A, B) \
+    A > B ? A : B
+
+void plap_program_desc(ArgsDef* def, const char* name, const char* desc)
+{
+    if (name) {
+        if (def->prog_name) {
+            free(def->prog_name);
+            def->prog_name = NULL;
+        }
+        def->prog_name = calloc(strlen(name) + 1, sizeof(char));
+        strcpy(def->prog_name, name);
+    }
+    if (desc) {
+        if (def->prog_desc) {
+            free(def->prog_desc);
+            def->prog_desc = NULL;
+        }
+        def->prog_desc = calloc(strlen(desc) + 1, sizeof(char));
+        strcpy(def->prog_desc, desc);
+    }
+}
 
 void plap_print_usage(ArgsDef* def, const char* prog_name)
 {
     printf("USAGE \n\t%s ", prog_name);
     for (size_t i = 0; i < def->pos_count; i++) {
         PositionalDef* a = &def->pos_defs[i];
-        if(a->required){
+        if (a->required) {
             printf("%s ", a->name);
         } else {
             printf("[%s] ", a->name);
         }
     }
     printf("\n");
+    if(def->prog_desc){
+        printf("\nDESCRIPTION:\n");
+        printf("\t%s\n", def->prog_desc);
+    }
     printf("\nARGUMENTS:\n");
     for (size_t i = 0; i < def->pos_count; i++) {
-        printf("\t%s -- ", def->pos_defs[i].name);
-        if(def->pos_defs[i].desc){
-            printf("%s", def->pos_defs[i].desc);
+        PositionalDef* a = &def->pos_defs[i];
+        printf("\t%-*s -- ", (int)def->pos_longest_n, a->name);
+        if (a->desc) {
+            printf("%s", a->desc);
         }
         printf("\n");
     }
@@ -147,25 +184,35 @@ void plap_print_usage(ArgsDef* def, const char* prog_name)
     for (size_t i = 0; i < def->opt_count; i++) {
         OptionDef* o = &def->opt_defs[i];
         if (o->short_name && o->long_name) {
-            printf("\t-%s, --%s ", o->short_name, o->long_name);
+            printf("\t-%-*s, --%-*s ",
+                (int)def->opt_longest_sh_n,
+                o->short_name,
+                (int)def->opt_longest_ln_n,
+                o->long_name);
         } else if (o->short_name) {
-            printf("\t-%s ", o->short_name);
+            printf("\t-%-*s ",
+                (int)def->opt_longest_sh_n,
+                o->short_name);
         } else if (o->long_name) {
-            printf("\t--%s ", o->long_name);
+            printf("\t--%-*s ",
+                (int)def->opt_longest_ln_n,
+                o->long_name);
         }
-        if(o->desc){
-            printf("\t -- %s", o->desc);
+        if (o->desc) {
+            printf("\t -- %s",
+                o->desc);
         }
         printf("\n");
     }
     printf("\n");
 }
 
-const char* strip_path_from_name(const char* path){
+const char* strip_path_from_name(const char* path)
+{
     size_t len = strlen(path);
     size_t i = len;
-    while(i >= 1){
-        if(path[i-1] == '/' || path[i-1] == '\\'){
+    while (i >= 1) {
+        if (path[i - 1] == '/' || path[i - 1] == '\\') {
             return path + i;
         }
         i--;
@@ -177,7 +224,11 @@ Args plap_parse_args(ArgsDef def, int argc, char** args)
 {
     ArgsWrap awrap = plap_args_wrap_wrap(argc, args);
     const char* prog_name = plap_args_wrap_next(&awrap);
-    prog_name = strip_path_from_name(prog_name);
+    if (def.prog_name) {
+        prog_name = def.prog_name;
+    } else {
+        prog_name = strip_path_from_name(prog_name);
+    }
     if ((argc - 1) < def.pos_req || argc == 0) {
         fprintf(stderr, "Not enough arguments were supplied\n");
         plap_print_usage(&def, prog_name);
@@ -344,7 +395,7 @@ void plap_parse_option(const char* value, ArgsWrap* awrap, OptionDef* optdefs, s
 void plap_positional(ArgsDef* def, const char* name, const char* desc, int parse_as, int required)
 {
     PositionalDef pdef = { 0 };
-    if(name){
+    if (name) {
         pdef.name = calloc(strlen(name) + 1, sizeof(char));
         strcpy(pdef.name, name);
     } else {
@@ -353,6 +404,7 @@ void plap_positional(ArgsDef* def, const char* name, const char* desc, int parse
         pdef.name = calloc(strlen(default_name) + 1, sizeof(char));
         strcpy(pdef.name, default_name);
     }
+    def->pos_longest_n = plap_max(def->pos_longest_n, strlen(pdef.name));
     if (desc) {
         pdef.desc = calloc(strlen(desc) + 1, sizeof(char));
         strcpy(pdef.desc, desc);
@@ -369,19 +421,21 @@ void plap_positional(ArgsDef* def, const char* name, const char* desc, int parse
 
 void plap_option(ArgsDef* def, const char* sh, const char* l, const char* desc, int parse_as, int needs_value)
 {
-    if(!l){
+    if (!l) {
         PLAP_DEFINITION_ERROR("option with no long name specified (long name is mandatory)\n");
     }
     OptionDef* same = find_option_def(def->opt_defs, def->opt_count, sh, l);
-    if (same){
+    if (same) {
         PLAP_DEFINITION_ERROR("conflicting option definition found (%s)", same->long_name);
     }
     OptionDef odef = { 0 };
     odef.long_name = calloc(strlen(l) + 1, sizeof(char));
     strcpy(odef.long_name, l);
+    def->opt_longest_ln_n = plap_max(def->opt_longest_ln_n, strlen(l));
     if (sh) {
         odef.short_name = calloc(strlen(sh) + 1, sizeof(char));
         strcpy(odef.short_name, sh);
+        def->opt_longest_sh_n = plap_max(def->opt_longest_sh_n, strlen(sh));
     }
     if (desc) {
         odef.desc = calloc(strlen(desc) + 1, sizeof(char));
