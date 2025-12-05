@@ -92,6 +92,9 @@ void plap_print_usage(ArgsDef* def, const char* prog_name);
 /// Leave `name` as NULL if you don't want the default program name to be overriden
 void plap_program_desc(ArgsDef* def, const char* name, const char* desc);
 
+#define plap_fail_on_no_args(def) \
+    def->pos_req = -1;
+
 void plap_positional(ArgsDef* def, const char* name, const char* desc, int parse_as, int required);
 
 #define plap_positional_int(def, name, desc, required) \
@@ -167,7 +170,7 @@ void plap_print_usage(ArgsDef* def, const char* prog_name)
         }
     }
     printf("\n");
-    if(def->prog_desc){
+    if (def->prog_desc) {
         printf("\nDESCRIPTION:\n");
         printf("\t%s\n", def->prog_desc);
     }
