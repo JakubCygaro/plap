@@ -44,6 +44,7 @@ typedef struct positional_def {
     int parse_as;
     int required;
     char* name;
+    char* desc;
 } PositionalDef;
 
 typedef struct option_def {
@@ -52,6 +53,7 @@ typedef struct option_def {
     int needs_value;
     char* short_name;
     char* long_name;
+    char* desc;
 } OptionDef;
 
 typedef struct args_def_t {
@@ -80,18 +82,31 @@ ArgsDef plap_args_def();
 Args plap_parse_args(ArgsDef def, int argc, char** args);
 void plap_print_usage(ArgsDef* def, const char* prog_name);
 
-void plap_positional(ArgsDef* def, const char* name, int parse_as, int required);
-void plap_positional_string(ArgsDef* def, const char* name, int required);
-void plap_positional_int(ArgsDef* def, const char* name, int required);
-void plap_positional_double(ArgsDef* def, const char* name, int required);
+void plap_positional(ArgsDef* def, const char* name, const char* desc, int parse_as, int required);
 
-void plap_option(ArgsDef* def, const char* sh, const char* l, int parse_as, int needs_value);
-void plap_option_string(ArgsDef* def, const char* sh, const char* l, int needs_value);
-void plap_option_int(ArgsDef* def, const char* sh, const char* l, int needs_value);
-void plap_option_double(ArgsDef* def, const char* sh, const char* l, int needs_value);
+#define plap_positional_int(def, name, desc, required) \
+    plap_positional(def, name, desc, PLAP_INT, required)
+
+#define plap_positional_double(def, name, desc, required) \
+    plap_positional(def, name, desc, PLAP_DOUBLE, required)
+
+#define plap_positional_string(def, name, desc, required) \
+    plap_positional(def, name, desc, PLAP_STRING, required)
+
+void plap_option(ArgsDef* def, const char* sh, const char* l, const char* desc, int parse_as, int needs_value);
+
+#define plap_option_string(def, sh, l, desc, needs_value) \
+    plap_option(def, sh, l, desc, PLAP_STRING, needs_value)
+
+#define plap_option_int(def, sh, l, desc, needs_value) \
+    plap_option(def, sh, l, desc, PLAP_INT, needs_value)
+
+#define plap_option_double(def, sh, l, desc, needs_value) \
+    plap_option(def, sh, l, desc, PLAP_DOUBLE, needs_value)
 
 void plap_free_option(Option opt);
 void plap_free_args_def(ArgsDef def);
+void plap_free_opt_def(OptionDef odef);
 void plap_free_args(Args a);
 
 Option* plap_get_option(Args* args, const char* sh, const char* l);
@@ -100,32 +115,69 @@ PositionalArg* plap_get_positional(Args* args, size_t pos);
 ArgsWrap plap_args_wrap_wrap(int argc, char** args);
 char* plap_args_wrap_next(ArgsWrap* aw);
 
+
 #endif
 #ifdef PLAP_IMPLEMENTATION
+
+#define PLAP_DEFINITION_ERROR(MSG, ...)\
+    fprintf(stderr, "PLAP DEFINITION ERROR: " MSG, ## __VA_ARGS__);\
+    exit(-1)
 
 void plap_print_usage(ArgsDef* def, const char* prog_name)
 {
     printf("USAGE \n\t%s ", prog_name);
     for (size_t i = 0; i < def->pos_count; i++) {
-        printf("%s ", def->pos_defs[i].name);
+        PositionalDef* a = &def->pos_defs[i];
+        if(a->required){
+            printf("%s ", a->name);
+        } else {
+            printf("[%s] ", a->name);
+        }
+    }
+    printf("\n");
+    printf("\nARGUMENTS:\n");
+    for (size_t i = 0; i < def->pos_count; i++) {
+        printf("\t%s -- ", def->pos_defs[i].name);
+        if(def->pos_defs[i].desc){
+            printf("%s", def->pos_defs[i].desc);
+        }
+        printf("\n");
     }
     printf("\nOPTIONS:\n");
     for (size_t i = 0; i < def->opt_count; i++) {
         OptionDef* o = &def->opt_defs[i];
         if (o->short_name && o->long_name) {
-            printf("\t-%s, --%s \n", o->short_name, o->long_name);
+            printf("\t-%s, --%s ", o->short_name, o->long_name);
         } else if (o->short_name) {
-            printf("\t-%s \n", o->short_name);
+            printf("\t-%s ", o->short_name);
         } else if (o->long_name) {
-            printf("\t--%s \n", o->long_name);
+            printf("\t--%s ", o->long_name);
         }
+        if(o->desc){
+            printf("\t -- %s", o->desc);
+        }
+        printf("\n");
     }
+    printf("\n");
+}
+
+const char* strip_path_from_name(const char* path){
+    size_t len = strlen(path);
+    size_t i = len;
+    while(i >= 1){
+        if(path[i-1] == '/' || path[i-1] == '\\'){
+            return path + i;
+        }
+        i--;
+    }
+    return path;
 }
 
 Args plap_parse_args(ArgsDef def, int argc, char** args)
 {
     ArgsWrap awrap = plap_args_wrap_wrap(argc, args);
-    char* prog_name = plap_args_wrap_next(&awrap);
+    const char* prog_name = plap_args_wrap_next(&awrap);
+    prog_name = strip_path_from_name(prog_name);
     if ((argc - 1) < def.pos_req || argc == 0) {
         fprintf(stderr, "Not enough arguments were supplied\n");
         plap_print_usage(&def, prog_name);
@@ -254,11 +306,11 @@ void plap_parse_option(const char* value, ArgsWrap* awrap, OptionDef* optdefs, s
         exit(-1);
     }
     optdf->matched = 1;
-    if(ln){
+    if (ln) {
         res->long_name = (char*)calloc(strlen(ln) + 1, sizeof(char));
         strcpy(res->long_name, ln);
     }
-    if(s){
+    if (s) {
         res->short_name = (char*)calloc(strlen(s) + 1, sizeof(char));
         strcpy(res->short_name, s);
     }
@@ -289,25 +341,22 @@ void plap_parse_option(const char* value, ArgsWrap* awrap, OptionDef* optdefs, s
     }
 }
 
-void plap_positional_int(ArgsDef* def, const char* name, int required)
-{
-    plap_positional(def, name, PLAP_INT, required);
-}
-
-void plap_positional_double(ArgsDef* def, const char* name, int required)
-{
-    plap_positional(def, name, PLAP_DOUBLE, required);
-}
-void plap_positional_string(ArgsDef* def, const char* name, int required)
-{
-    plap_positional(def, name, PLAP_STRING, required);
-}
-
-void plap_positional(ArgsDef* def, const char* name, int parse_as, int required)
+void plap_positional(ArgsDef* def, const char* name, const char* desc, int parse_as, int required)
 {
     PositionalDef pdef = { 0 };
-    pdef.name = calloc(strlen(name) + 1, sizeof(char));
-    strcpy(pdef.name, name);
+    if(name){
+        pdef.name = calloc(strlen(name) + 1, sizeof(char));
+        strcpy(pdef.name, name);
+    } else {
+        char default_name[32] = { 0 };
+        sprintf(default_name, "arg%ld", def->pos_count + 1);
+        pdef.name = calloc(strlen(default_name) + 1, sizeof(char));
+        strcpy(pdef.name, default_name);
+    }
+    if (desc) {
+        pdef.desc = calloc(strlen(desc) + 1, sizeof(char));
+        strcpy(pdef.desc, desc);
+    }
     pdef.parse_as = parse_as;
     pdef.required = required;
     def->pos_req += (required ? 1 : 0);
@@ -317,26 +366,26 @@ void plap_positional(ArgsDef* def, const char* name, int parse_as, int required)
     }
     def->pos_defs[def->pos_count - 1] = pdef;
 }
-void plap_option_string(ArgsDef* def, const char* sh, const char* l, int needs_value)
+
+void plap_option(ArgsDef* def, const char* sh, const char* l, const char* desc, int parse_as, int needs_value)
 {
-    plap_option(def, sh, l, PLAP_STRING, needs_value);
-}
-void plap_option_int(ArgsDef* def, const char* sh, const char* l, int needs_value)
-{
-    plap_option(def, sh, l, PLAP_INT, needs_value);
-}
-void plap_option_double(ArgsDef* def, const char* sh, const char* l, int needs_value)
-{
-    plap_option(def, sh, l, PLAP_DOUBLE, needs_value);
-}
-void plap_option(ArgsDef* def, const char* sh, const char* l, int parse_as, int needs_value)
-{
+    if(!l){
+        PLAP_DEFINITION_ERROR("option with no long name specified (long name is mandatory)\n");
+    }
+    OptionDef* same = find_option_def(def->opt_defs, def->opt_count, sh, l);
+    if (same){
+        PLAP_DEFINITION_ERROR("conflicting option definition found (%s)", same->long_name);
+    }
     OptionDef odef = { 0 };
     odef.long_name = calloc(strlen(l) + 1, sizeof(char));
     strcpy(odef.long_name, l);
     if (sh) {
         odef.short_name = calloc(strlen(sh) + 1, sizeof(char));
         strcpy(odef.short_name, sh);
+    }
+    if (desc) {
+        odef.desc = calloc(strlen(desc) + 1, sizeof(char));
+        strcpy(odef.desc, desc);
     }
     odef.parse_as = parse_as;
     odef.needs_value = needs_value;
@@ -352,6 +401,9 @@ void plap_free_pos_def(PositionalDef pdef)
     if (pdef.name) {
         free(pdef.name);
     }
+    if (pdef.desc) {
+        free(pdef.desc);
+    }
 }
 void plap_free_args_def(ArgsDef def)
 {
@@ -360,6 +412,23 @@ void plap_free_args_def(ArgsDef def)
     }
     free(def.pos_defs);
     def.pos_defs = NULL;
+    for (size_t i = 0; i < def.opt_count; i++) {
+        plap_free_opt_def(def.opt_defs[i]);
+    }
+    free(def.opt_defs);
+    def.opt_defs = NULL;
+}
+void plap_free_opt_def(OptionDef odef)
+{
+    if (odef.long_name) {
+        free(odef.long_name);
+    }
+    if (odef.short_name) {
+        free(odef.short_name);
+    }
+    if (odef.desc) {
+        free(odef.desc);
+    }
 }
 
 ArgsWrap plap_args_wrap_wrap(int argc, char** args)
