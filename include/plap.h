@@ -169,6 +169,9 @@ void plap_print_usage(ArgsDef* def, const char* prog_name)
             printf("[%s] ", a->name);
         }
     }
+    if(def->opt_count > 0){
+        printf("[OPTIONS]");
+    }
     printf("\n");
     if (def->prog_desc) {
         printf("\nDESCRIPTION:\n");
