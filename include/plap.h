@@ -74,6 +74,7 @@ typedef struct args_def_t {
     // general
     char* prog_name;
     char* prog_desc;
+    size_t require_any_input;
 } ArgsDef;
 
 typedef struct args_wrap {
@@ -93,7 +94,7 @@ void plap_print_usage(ArgsDef* def, const char* prog_name);
 void plap_program_desc(ArgsDef* def, const char* name, const char* desc);
 
 #define plap_fail_on_no_args(def) \
-    def->pos_req = -1;
+    def->require_any_input = 1;
 
 void plap_positional(ArgsDef* def, const char* name, const char* desc, int parse_as, int required);
 
@@ -236,7 +237,7 @@ Args plap_parse_args(ArgsDef def, int argc, char** args)
     } else {
         prog_name = strip_path_from_name(prog_name);
     }
-    if ((argc - 1) < def.pos_req || argc == 0) {
+    if ((argc - 1) < def.pos_req || argc == 0 || (argc == 1 && def.require_any_input)) {
         fprintf(stderr, "Not enough arguments were supplied\n");
         plap_print_usage(&def, prog_name);
         exit(-1);
