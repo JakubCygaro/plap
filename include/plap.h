@@ -177,7 +177,8 @@ void plap_print_usage(ArgsDef* def, const char* prog_name)
         printf("\nDESCRIPTION:\n");
         printf("\t%s\n", def->prog_desc);
     }
-    printf("\nARGUMENTS:\n");
+    if(def->pos_count > 0)
+        printf("\nARGUMENTS:\n");
     for (size_t i = 0; i < def->pos_count; i++) {
         PositionalDef* a = &def->pos_defs[i];
         printf("\t%-*s -- ", (int)def->pos_longest_n, a->name);
