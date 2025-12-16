@@ -8,6 +8,27 @@
 #define PLAP_STRING 1
 #define PLAP_INT 2
 #define PLAP_DOUBLE 3
+#define PLAP_LIST 4
+
+typedef struct StringList {
+    size_t len;
+    size_t cap;
+    char** data;
+} StringList;
+
+#define plap_dynarr_push(DA, V)                            \
+    do {                                                   \
+        if (DA.len + 1 >= DA.cap) {                        \
+            DA.cap *= 2;                                   \
+            DA.data = realloc(DA.data, DA.cap * sizeof V); \
+        }                                                  \
+        DA.data[DA.len++] = V;                             \
+    } while (0)
+
+typedef struct str {
+    const char* data;
+    size_t len;
+} str;
 
 typedef struct positional_arg {
     char* name;
@@ -22,11 +43,12 @@ typedef struct positional_arg {
 typedef struct option {
     char* short_name;
     char* long_name;
-    int t;
+    int ty;
     union {
         char* str;
         int i;
         double lf;
+        StringList list;
     };
 } Option;
 
@@ -118,6 +140,9 @@ void plap_option(ArgsDef* def, const char* sh, const char* l, const char* desc, 
 #define plap_option_double(def, sh, l, desc, needs_value) \
     plap_option(def, sh, l, desc, PLAP_DOUBLE, needs_value)
 
+#define plap_option_list(def, sh, l, desc, needs_value) \
+    plap_option(def, sh, l, desc, PLAP_LIST, needs_value)
+
 void plap_free_option(Option opt);
 void plap_free_args_def(ArgsDef def);
 void plap_free_opt_def(OptionDef odef);
@@ -170,7 +195,7 @@ void plap_print_usage(ArgsDef* def, const char* prog_name)
             printf("[%s] ", a->name);
         }
     }
-    if(def->opt_count > 0){
+    if (def->opt_count > 0) {
         printf("[OPTIONS]");
     }
     printf("\n");
@@ -178,7 +203,7 @@ void plap_print_usage(ArgsDef* def, const char* prog_name)
         printf("\nDESCRIPTION:\n");
         printf("\t%s\n", def->prog_desc);
     }
-    if(def->pos_count > 0)
+    if (def->pos_count > 0)
         printf("\nARGUMENTS:\n");
     for (size_t i = 0; i < def->pos_count; i++) {
         PositionalDef* a = &def->pos_defs[i];
@@ -310,33 +335,103 @@ void plap_parse_positional(char* value, PositionalArg* parg, PositionalDef* pdef
         strcpy(parg->str, value);
     }
 }
+#define plap_slice_is_empty(SLICE) SLICE.len == 0
+#define STRFMT() "%.*s"
+#define STRPRINT(SLICE) (int)SLICE.len, SLICE.data
 
-int streq(const char* a, const char* b)
+str plap_empty_slice()
+{
+    return (str) {
+        .data = NULL,
+        .len = 0,
+    };
+}
+str plap_as_slice(const char* s)
+{
+    if (!s)
+        return plap_empty_slice();
+    return (str) {
+        .data = s,
+        .len = strlen(s)
+    };
+}
+
+int stringeq(const char* a, const char* b)
 {
     if (!a || !b)
         return 0;
     return strcmp(a, b) == 0;
 }
+int streq(const str a, const str b)
+{
+    if (a.len == 0 || b.len == 0)
+        return 0;
+    if (a.len != b.len)
+        return 0;
+    for (size_t i = 0; i < a.len & i < b.len; i++) {
+        if (a.data[i] != b.data[i])
+            return 0;
+    }
+    return 1;
+}
 
-OptionDef* find_option_def(OptionDef* odefs, size_t ocount, const char* sh, const char* l)
+OptionDef* find_option_def(OptionDef* odefs, size_t ocount, const str sh, const str l)
 {
     for (size_t i = 0; i < ocount; i++) {
         OptionDef* od = &odefs[i];
-        if (streq(od->long_name, l) || streq(od->short_name, sh)) {
+        str sh_s = plap_as_slice(od->short_name);
+        str l_s = plap_as_slice(od->long_name);
+        if (streq(l_s, l) || streq(sh_s, sh)) {
             return od;
         }
     }
     return NULL;
 }
-Option* find_option(Option* opts, size_t ocount, const char* sh, const char* l)
+Option* find_option(Option* opts, size_t ocount, const str sh, const str l)
 {
     for (size_t i = 0; i < ocount; i++) {
         Option* od = &opts[i];
-        if (streq(od->long_name, l) || streq(od->short_name, sh)) {
+        str sh_s = plap_as_slice(od->short_name);
+        str l_s = plap_as_slice(od->long_name);
+        if (streq(l_s, l) || streq(sh_s, sh)) {
             return od;
         }
     }
     return NULL;
+}
+
+int plap_find_char(const str s, char c)
+{
+    for (int i = 0; i < s.len && s.data[i] != '\0'; i++) {
+        if (s.data[i] == c) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+StringList plap_parse_list(const char* string)
+{
+    size_t string_len = strlen(string);
+    printf("%s\n", string);
+    StringList list = {
+        .len = 0,
+        .cap = 1,
+        .data = (char**)calloc(1, sizeof(char*)),
+    };
+    size_t last_sep = 0;
+    for (size_t i = 0; i < string_len; i++) {
+        if (string[i] == ',') {
+            char* elem = (char*)calloc(i - last_sep + 1, sizeof(char));
+            memcpy(elem, string + last_sep, i - last_sep);
+            plap_dynarr_push(list, elem);
+            last_sep = i;
+        }
+    }
+    char* elem = (char*)calloc(string_len - last_sep + 1, sizeof(char));
+    memcpy(elem, string + last_sep, string_len - last_sep);
+    plap_dynarr_push(list, elem);
+    return list;
 }
 
 void plap_parse_option(const char* value, ArgsWrap* awrap, OptionDef* optdefs, size_t optdefc, Option* res)
@@ -346,16 +441,45 @@ void plap_parse_option(const char* value, ArgsWrap* awrap, OptionDef* optdefs, s
         fprintf(stderr, "Empty option\n");
         exit(-1);
     }
+    str val_slice = {
+        .data = value,
+        .len = len
+    };
+    int eq = plap_find_char(val_slice, '=');
+    printf("= %d\n", eq);
     OptionDef* optdf = NULL;
     const char* ln = NULL;
     const char* s = NULL;
+    str ln_slice = plap_empty_slice();
+    str sh_slice = plap_empty_slice();
     if (value[0] == '-') {
+        if (eq != -1) {
+            ln_slice = (str) {
+                .data = value + 1,
+                .len = (size_t)eq - 1
+            };
+        } else {
+            ln_slice = (str) {
+                .data = value + 1,
+                .len = len - 1
+            };
+        }
         ln = value + 1;
-        optdf = find_option_def(optdefs, optdefc, NULL, ln);
     } else {
+        if (eq != -1) {
+            sh_slice = (str) {
+                .data = value,
+                .len = (size_t)eq
+            };
+        } else {
+            sh_slice = (str) {
+                .data = value,
+                .len = len
+            };
+        }
         s = value;
-        optdf = find_option_def(optdefs, optdefc, s, NULL);
     }
+    optdf = find_option_def(optdefs, optdefc, sh_slice, ln_slice);
     if (!optdf) {
         fprintf(stderr, "Unknown option `%s`\n", value - 1);
         exit(-1);
@@ -366,36 +490,48 @@ void plap_parse_option(const char* value, ArgsWrap* awrap, OptionDef* optdefs, s
     }
     optdf->matched = 1;
     if (ln) {
-        res->long_name = (char*)calloc(strlen(ln) + 1, sizeof(char));
-        strcpy(res->long_name, ln);
+        res->long_name = (char*)calloc(ln_slice.len + 1, sizeof(char));
+        memcpy(res->long_name, ln_slice.data, ln_slice.len);
     }
     if (s) {
-        res->short_name = (char*)calloc(strlen(s) + 1, sizeof(char));
-        strcpy(res->short_name, s);
+        res->short_name = (char*)calloc(sh_slice.len + 1, sizeof(char));
+        memcpy(res->short_name, sh_slice.data, sh_slice.len);
+        printf("res %s\n", res->short_name);
     }
 
     if (!optdf->needs_value) {
         return;
     }
-    char* next = plap_args_wrap_next(awrap);
-    if (!next) {
+    const char* next = NULL;
+    if (eq != -1) {
+        next = value + eq + 1;
+        printf("next: %s\n", next);
+    } else {
+        next = plap_args_wrap_next(awrap);
+    }
+    if (!next || *next == '\0') {
         fprintf(stderr, "Option `%s` without value\n", value - 1);
         exit(-1);
     }
     switch (optdf->parse_as) {
     case PLAP_INT:
-        res->t = PLAP_INT;
+        res->ty = PLAP_INT;
         res->i = atoi(next);
         break;
     case PLAP_DOUBLE:
-        res->t = PLAP_DOUBLE;
+        res->ty = PLAP_DOUBLE;
         res->lf = atof(next);
+        break;
+    case PLAP_LIST:
+        res->ty = PLAP_LIST;
+        res->list = plap_parse_list(next);
         break;
     case PLAP_STRING:
     default:
-        res->t = PLAP_STRING;
+        res->ty = PLAP_STRING;
         res->str = (char*)calloc(strlen(next) + 1, sizeof(char));
         strcpy(res->str, next);
+        printf("res->str: %s\n", res->str);
         break;
     }
 }
@@ -432,7 +568,7 @@ void plap_option(ArgsDef* def, const char* sh, const char* l, const char* desc, 
     if (!l) {
         PLAP_DEFINITION_ERROR("option with no long name specified (long name is mandatory)\n");
     }
-    OptionDef* same = find_option_def(def->opt_defs, def->opt_count, sh, l);
+    OptionDef* same = find_option_def(def->opt_defs, def->opt_count, plap_as_slice(sh), plap_as_slice(l));
     if (same) {
         PLAP_DEFINITION_ERROR("conflicting option definition found (%s)", same->long_name);
     }
@@ -530,13 +666,13 @@ void plap_free_option(Option opt)
     if (opt.short_name) {
         free(opt.short_name);
     }
-    if (opt.t == PLAP_STRING && opt.str) {
+    if (opt.ty == PLAP_STRING && opt.str) {
         free(opt.str);
     }
 }
 Option* plap_get_option(Args* args, const char* sh, const char* l)
 {
-    return find_option(args->optional_args, args->optional_count, sh, l);
+    return find_option(args->optional_args, args->optional_count, plap_as_slice(sh), plap_as_slice(l));
 }
 PositionalArg* plap_get_positional(Args* args, size_t pos)
 {
