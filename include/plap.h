@@ -413,24 +413,31 @@ int plap_find_char(const str s, char c)
 StringList plap_parse_list(const char* string)
 {
     size_t string_len = strlen(string);
-    printf("%s\n", string);
     StringList list = {
         .len = 0,
         .cap = 1,
         .data = (char**)calloc(1, sizeof(char*)),
     };
     size_t last_sep = 0;
-    for (size_t i = 0; i < string_len; i++) {
-        if (string[i] == ',') {
-            char* elem = (char*)calloc(i - last_sep + 1, sizeof(char));
-            memcpy(elem, string + last_sep, i - last_sep);
-            plap_dynarr_push(list, elem);
+    for (size_t i = 1; i <= string_len; i++) {
+        if (string[i-1] == ',') {
+            char* elem = (char*)calloc((i - 1) - last_sep + 1, sizeof(char));
+            memcpy(elem, string + last_sep, (i - 1) - last_sep);
+            if(strlen(elem) == 0){
+                free(elem);
+            } else {
+                plap_dynarr_push(list, elem);
+            }
             last_sep = i;
         }
     }
     char* elem = (char*)calloc(string_len - last_sep + 1, sizeof(char));
     memcpy(elem, string + last_sep, string_len - last_sep);
-    plap_dynarr_push(list, elem);
+    if(strlen(elem) == 0){
+        free(elem);
+    } else {
+        plap_dynarr_push(list, elem);
+    }
     return list;
 }
 
@@ -446,7 +453,6 @@ void plap_parse_option(const char* value, ArgsWrap* awrap, OptionDef* optdefs, s
         .len = len
     };
     int eq = plap_find_char(val_slice, '=');
-    printf("= %d\n", eq);
     OptionDef* optdf = NULL;
     const char* ln = NULL;
     const char* s = NULL;
@@ -496,7 +502,6 @@ void plap_parse_option(const char* value, ArgsWrap* awrap, OptionDef* optdefs, s
     if (s) {
         res->short_name = (char*)calloc(sh_slice.len + 1, sizeof(char));
         memcpy(res->short_name, sh_slice.data, sh_slice.len);
-        printf("res %s\n", res->short_name);
     }
 
     if (!optdf->needs_value) {
@@ -505,7 +510,6 @@ void plap_parse_option(const char* value, ArgsWrap* awrap, OptionDef* optdefs, s
     const char* next = NULL;
     if (eq != -1) {
         next = value + eq + 1;
-        printf("next: %s\n", next);
     } else {
         next = plap_args_wrap_next(awrap);
     }
@@ -531,7 +535,6 @@ void plap_parse_option(const char* value, ArgsWrap* awrap, OptionDef* optdefs, s
         res->ty = PLAP_STRING;
         res->str = (char*)calloc(strlen(next) + 1, sizeof(char));
         strcpy(res->str, next);
-        printf("res->str: %s\n", res->str);
         break;
     }
 }
@@ -668,6 +671,12 @@ void plap_free_option(Option opt)
     }
     if (opt.ty == PLAP_STRING && opt.str) {
         free(opt.str);
+    }
+    if(opt.ty == PLAP_LIST) {
+        for(size_t i = 0; i < opt.list.len; i++){
+            free(opt.list.data[i]);
+        }
+        free(opt.list.data);
     }
 }
 Option* plap_get_option(Args* args, const char* sh, const char* l)
